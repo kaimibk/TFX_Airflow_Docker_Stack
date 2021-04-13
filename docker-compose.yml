@@ -1,0 +1,89 @@
+version: "3"
+services: 
+  postgres:
+    image: postgres:9.6
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=airflow
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+  webserver:
+    build: .
+    container_name: airflow
+    restart: always
+    command: webserver
+    depends_on:
+      - postgres
+      - scheduler
+    env_file:
+      - .env
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./test:/usr/local/airflow/test
+      - ./plugins:/usr/local/airflow/plugins
+      - ./requirements/requirements.txt:/requirements.txt
+      - ./logs:/usr/local/airflow/logs
+      - ./notebooks:/usr/local/airflow/notebooks
+      - ./models:/usr/local/airflow/models
+      - ./metadata:/usr/local/airflow/metadata
+      - ./pipelines:/usr/local/airflow/pipelines
+      - ./data:/usr/local/airflow/data/
+      - ./scripts:/usr/local/airflow/scripts
+      - ./airflow.cfg:/usr/local/airflow/airflow.cfg
+      # - ~/.aws:/usr/local/airflow/.aws
+    ports:
+      - "8088:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+  scheduler:
+    image: puckel/docker-airflow:latest
+    restart: always
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./logs:/usr/local/airflow/logs
+      - ./notebooks:/usr/local/airflow/notebooks
+      - ./models:/usr/local/airflow/models
+      - ./pipelines:/usr/local/airflow/pipelines
+      - ./data:/usr/local/airflow/data/
+      - ./airflow.cfg:/usr/local/airflow/airflow.cfg
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /usr/local/airflow/airflow-scheduler.pid ]"]
+      interval: 30s
+      timeout: 30s
+      retries: 3    
+  tf-jupyter:
+    build: ./notebooks/
+    container_name: tf-jupyter
+    restart: always
+    environment:
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+    volumes:
+      - ./notebooks:/tf/notebooks
+      - ./models:/tf/models
+      - ./pipelines:/tf/pipelines
+      - ./data:/tf/data/
+      - ./dags:/tf/dags
+      - ./resources:/tf/resources
+    ports:
+      - "8888:8888"
+      - "6006:6006"
+  tf-serving:
+    image: tensorflow/serving:latest-gpu
+    container_name: tf-serving
+    restart: always
+    volumes:
+      - ./models:/models/
+    ports:
+      - "8501:8501"
+    command: --model_config_file=/models/models.config --model_config_file_poll_wait_seconds=60

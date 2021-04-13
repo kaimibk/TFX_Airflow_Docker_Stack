@@ -1,0 +1,4 @@
+tfx==0.26.1
+tensorflow-hub
+google-auth==1.28.0
+apache-beam[interactive]
